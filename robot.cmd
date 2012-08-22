@@ -64,7 +64,8 @@ exit /b
 	set comstr=%~1
 	shift
 	:nextShift
-	for /f "tokens=1,* delims==" %%i in ("%~1") do (
+	echo:%~1 %~2
+	for /f "tokens=1,* delims=:" %%i in ("%~1") do (
 		echo %comstr% | find "%%i" > nul && (
 			set %%i=%%j
 		)
@@ -76,7 +77,7 @@ exit /b
 :gen_file
 
 	setlocal
-	call :arg_parcer find;filename %*
+	call :arg_parser find:filename %*
 	rem:>%filename%
 	for /f "delims=<[]" %%i in ('find /n "<%find%>" "%~dpnx0" ^| find "<%find%>"') do set /a BBEG=%%i
 	for /f "delims=<[]" %%i in ('find /n "</%find%>" "%~dpnx0" ^| find "</%find%>"') do set /a BEND=%%i
@@ -96,8 +97,8 @@ exit /b %ERORLEVEL%
 :gen_vbs001_file
 
 	setlocal
-	call :arg_parcer filename;ICUSER;ICPASS;ICSERVER;ICBASE %*
-	call :gen_file find=vbs001 
+	call :arg_parser filename:ICUSER:ICPASS:ICSERVER:ICBASE %*
+	call :gen_file find:vbs001 
 exit /b %ERORLEVEL%
 
 <vbs001>
