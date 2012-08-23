@@ -48,6 +48,41 @@ exit /b %ERRORLEVEL%
 
 exit /b %ERRORLEVEL%
 
+	set RDATE=!date:~-4!.!date:~3,2!.!date:~0,2!
+
+
+:dump_base
+
+	setlocal
+	call :arg_parser ICBASE:BASEFILE %*
+	set CMDLINE=designer /s%ICSRV%\%ICBASE% /n%ICUSR% /p%ICPASS% /DisableStartupMessages /DumpIB ""%BASEFILE%""
+	call :run_prog prog:"%ICEXE%" cmdline:"%CMDLINE%" || call :err
+exit /b %ERRORLEVEL%
+
+:restore_base
+
+	setlocal
+	call :arg_parser ICBASE:BASEFILE %*
+	set CMDLINE=designer /s%ICSRV%\%ICBASE% /n%ICUSR% /p%ICPASS% /DisableStartupMessages /RestoreIB ""%BASEFILE%""
+	call :run_prog prog:"%ICEXE%" cmdline:"%CMDLINE%" || call :err
+exit /b %ERRORLEVEL%
+
+:kick_users
+
+	setlocal
+	call :arg_parser ICBASE %*
+	call :gen_file_name VBSFILE
+	set VBSLOG=%VBSFILE:VBS=LOG%
+	call :gen_vbs001_file filemane:%VBSFILE% ICUSER:%ICUSER% ICPASS:%ICPASS% ICSERVER:%ICSERVER% ICBASE:%ICBASE%
+	cscript %VBSFILE% //nologo 2>%VBSLOG%
+	for /f "tokens=4 delims=[] " %%i in ('dir intlname.ols ^| find /n /v "" ^| find "[7]"') do (
+		rem Вставить обработку ошибок
+		if "%%i" NEQ "0" ()
+	)
+	del /q /f %VBSLOG%
+	del /q /f %VBSFILE%
+exit /b %ERRORLEVEL%
+
 :gen_file_name
 
 	set _tmp=%1
@@ -101,6 +136,10 @@ exit /b %ERORLEVEL%
 	call :gen_file find:vbs001 
 exit /b %ERORLEVEL%
 
+:err
+
+exit /b %ERORLEVEL%
+
 <vbs001>
 Dim Connector
 Dim AgentConnection
@@ -111,7 +150,7 @@ Dim ibDesc
 Dim connections
 Dim ConnectString
 
-Set Connector = CreateObject("V81.COMConnector")
+Set Connector = CreateObject("V82.COMConnector")
 Set AgentConnection = Connector.ConnectAgent("%ICSERVER%")
 Set Cluster = AgentConnection.GetClusters()(0)
 AgentConnection.Authenticate Cluster, "", ""
