@@ -34,22 +34,22 @@ exit /b %ERRORLEVEL%
 		call :gen_file_name LOGFILE
 	)
 
+	set RDATE=!date:~-4!.!date:~3,2!.!date:~0,2!
 
-
-
-
-
-
-
-
-
-
-
+	call :roll_proc IBUOT:CBIT_UC_CONF IBIN:TEST_CBIT BASEFILE:Z:\CBIT_UC_CONF_%RDATE%.dt
+	call :roll_proc IBUOT:CEBIT_2011_2012 IBIN:TEST_CEBIT BASEFILE:Z:\CBIT_2011_2012_%RDATE%.dt
 
 exit /b %ERRORLEVEL%
 
-	set RDATE=!date:~-4!.!date:~3,2!.!date:~0,2!
+:roll_proc
 
+	setlocal
+	call :arg_parser IBOUT:IBIN:BASEFILE
+	call :kick_users ICBASE:%IBOUT%
+	call :dump_base ICBASE:%IBOUT% BASEFILE:"%BASEFILE%"
+	call :kick_users ICBASE:%IBIN%
+	call :restore_base ICBASE:%IBIN% BASEFILE:"%BASEFILE%"
+exit /b %ERRORLEVEL%
 
 :dump_base
 
@@ -102,7 +102,7 @@ exit /b
 	echo:%~1 %~2
 	for /f "tokens=1,* delims=:" %%i in ("%~1") do (
 		echo %comstr% | find "%%i" > nul && (
-			set %%i=%%j
+			set %%i=%%~j
 		)
 	)
 	shift
