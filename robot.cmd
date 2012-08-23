@@ -1,12 +1,12 @@
 @echo off
 setlocal enabledelayedexpansion
 
-echo runproc; | find "%~1" 1>nul 2>nul && (
-	set _tmp=%~1
-	set !_tmp:-=!=%~2
-) || (
+REM echo runproc; | find "%~1" 1>nul 2>nul && (
+	REM set _tmp=%~1
+	REM set !_tmp:-=!=%~2
+REM ) || (
 	
-)
+REM )
 
 
 call :runproc
@@ -38,7 +38,7 @@ exit /b %ERRORLEVEL%
 
 	call :roll_proc IBUOT:CBIT_UC_CONF IBIN:TEST_CBIT BASEFILE:Z:\CBIT_UC_CONF_%RDATE%.dt
 	call :roll_proc IBUOT:CEBIT_2011_2012 IBIN:TEST_CEBIT BASEFILE:Z:\CBIT_2011_2012_%RDATE%.dt
-
+	rem call :roll_files
 exit /b %ERRORLEVEL%
 
 :roll_proc
@@ -56,7 +56,7 @@ exit /b %ERRORLEVEL%
 	setlocal
 	call :arg_parser ICBASE:BASEFILE %*
 	set CMDLINE=designer /s%ICSRV%\%ICBASE% /n%ICUSR% /p%ICPASS% /DisableStartupMessages /DumpIB ""%BASEFILE%""
-	call :run_prog prog:"%ICEXE%" cmdline:"%CMDLINE%" || call :err
+	call :roll_base CMDLINE:"%CMDLINE%"
 exit /b %ERRORLEVEL%
 
 :restore_base
@@ -64,7 +64,78 @@ exit /b %ERRORLEVEL%
 	setlocal
 	call :arg_parser ICBASE:BASEFILE %*
 	set CMDLINE=designer /s%ICSRV%\%ICBASE% /n%ICUSR% /p%ICPASS% /DisableStartupMessages /RestoreIB ""%BASEFILE%""
-	call :run_prog prog:"%ICEXE%" cmdline:"%CMDLINE%" || call :err
+	call :roll_base CMDLINE:"%CMDLINE%"
+exit /b %ERRORLEVEL%
+
+:roll_base
+
+	setlocal
+	call :arg_parser CMDLINE %*
+	for /f "" %%i in ('call :start_proc exec:"%ICEXE%" cmdline:"%CMDLINE%"') do set PID=%%i
+	if "%PID%" NEQ "" call :wait_for_pid %PID%
+exit /b %ERRORLEVEL%
+
+:wait_for_pid
+
+	ping -n 5 -w 1000 127.0.0.1 >nul
+	for /f "tokens=1 delims=. " %%i in ('tasklist /nh /fi "PID eq %1"') do (
+		if "%%i" NEQ "" call :wait_for_pid %1
+	)
+exit /b
+
+:start_proc
+
+	setlocal
+	call :argParser exec:cmdline:workdir:host:user:pass:record %*
+
+	if "%exec:"=%" EQU "" (
+		call :err 1000
+		exit /b %ERRORLEVEL%
+	)
+
+	if "%host%" NEQ "" (
+		set host=/NODE:%host%
+		if "%user%" NEQ "" (
+			set user=/USER:%user%
+			if "%pass%" NEQ "" (
+				set pass=/PASSWORD:%pass%
+			)
+		)
+	)
+
+	if "%record%" NEQ "" (
+		set record=/RECORD:%record%
+	)
+
+	set global_params=%record% %host% %user% %pass%
+
+	for /f "usebackq tokens=*" %%G IN (`wmic  %global_params%  process call create "%exec% %cmdline%"^,"%workdir%"`) do ( 
+		rem echo %%G
+		set _tmp=%%G
+		set _tmp=!_tmp:^>=^^^>!
+		echo !_tmp! | find "ProcessId" > nul && (
+			for /f  "tokens=2 delims=;= " %%H in ('echo !_tmp!') do (
+				call set /A PID=%%H
+			)
+		)
+		echo !_tmp! | find "ReturnValue" > nul && (
+			for /f  "tokens=2 delims=;= " %%I in ('echo !_tmp!') do (
+				call set /A RETCOD=%%I
+			)
+		)
+		rem call :concat
+	)
+	set _tmp=
+	
+	rem successful execution
+	if "%PID%" NEQ "" (
+		echo %PID%
+		exit /b
+		rem exit /B %PID%
+	) else (
+		call :err %RETCOD%
+	)
+
 exit /b %ERRORLEVEL%
 
 :kick_users
