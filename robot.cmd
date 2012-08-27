@@ -1,94 +1,87 @@
 @echo off
-setlocal enabledelayedexpansion
 
-REM echo runproc; | find "%~1" 1>nul 2>nul && (
-	REM set _tmp=%~1
-	REM set !_tmp:-=!=%~2
-REM ) || (
-	
-REM )
-
-
-call :runproc
-exit /b %ERRORLEVEL%
-
-:runproc
-
-	if "%init%" NEQ "" (goto :initdone)
-	setlocal disabledelayedexpansion
+if "%init%" EQU "done" goto :init_done
+setlocal disabledelayedexpansion
+if exist "%~1" (
 	rem Загружаем параметры обмена
-	REM for /f "usebackq eol=; delims== tokens=1,*" %%i in ("%~dpnx1") do (
-		REM set %%i=%%~j
-	REM )
+	for /f "usebackq eol=; delims== tokens=1,*" %%i in ("%~dpnx1") do (
+		set %%i=%%~j
+	)
+)
 	rem Применяем глобальные параметры
-	for /f "delims=<[]" %%i in ('find /n "<SettingsBlock>" "%~dpnx0" ^| find "<SettingsBlock>"') do set /a SKIP=%%i
-	for /f "usebackq skip=%SKIP% eol=; delims== tokens=1,*" %%i in ("%~dpnx0") do (
-		if not defined %%i set %%i=%%~j
-	)
-	if not defined LDATE set LDATE=!date!
-	if not defined LTIME set LTIME=!time!
-	setlocal enabledelayedexpansion
-	if not defined LOG (
-		set LOGFILE=con
-	) else (
-		call :gen_file_name LOGFILE
-	)
-
-	set RDATE=!date:~-4!.!date:~3,2!.!date:~0,2!
-
-	call :roll_proc IBUOT:CBIT_UC_CONF IBIN:TEST_CBIT BASEFILE:Z:\CBIT_UC_CONF_%RDATE%.dt
-	call :roll_proc IBUOT:CEBIT_2011_2012 IBIN:TEST_CEBIT BASEFILE:Z:\CBIT_2011_2012_%RDATE%.dt
-	rem call :roll_files
+for /f "delims=<[]" %%i in ('find /n "<SettingsBlock>" "%~dpnx0" ^| find "<SettingsBlock>"') do set /a SKIP=%%i
+for /f "usebackq skip=%SKIP% eol=; delims== tokens=1,*" %%i in ("%~dpnx0") do (
+	if not defined %%i set %%i=%%~j
+)
+if not defined LDATE set LDATE=!date!
+if not defined LTIME set LTIME=!time!
+set init=done
+:init_done
+setlocal enabledelayedexpansion
+if not defined LOG (
+	set LOGFILE=con
+) else (
+	call :gen_file_name LOGFILE
+)
+echo dump_base;restore_base;kick_users;start_proc | find "%~1" 1>nul 2>nul ^
+	&& (call :call_proc %*) ^
+	|| (call :run_proc)
 exit /b %ERRORLEVEL%
 
-:roll_proc
+:call_proc
+
+	set proc=%1
+	set cmdline=%*
+	set cmdline=!cmdline:%proc%=!
+	call :%proc% %cmdline%
+exit /b %ERRORLEVEL%
+
+:run_proc
 
 	setlocal
 	call :arg_parser IBOUT:IBIN:BASEFILE
 	call :kick_users ICBASE:%IBOUT%
-	call :dump_base ICBASE:%IBOUT% BASEFILE:"%BASEFILE%"
+	call :dump_base ICBASE:%IBOUT% BASEFILE:%BASEFILE%
 	call :kick_users ICBASE:%IBIN%
-	call :restore_base ICBASE:%IBIN% BASEFILE:"%BASEFILE%"
+	call :restore_base ICBASE:%IBIN% BASEFILE:%BASEFILE%
+	rem call :roll_files
 exit /b %ERRORLEVEL%
 
 :dump_base
 
-	setlocal
-	call :arg_parser ICBASE:BASEFILE %*
-	set CMDLINE=designer /s%ICSRV%\%ICBASE% /n%ICUSR% /p%ICPASS% /DisableStartupMessages /DumpIB ""%BASEFILE%""
-	call :roll_base CMDLINE:"%CMDLINE%"
+	call :roll_base MODE:DumpIB %*
 exit /b %ERRORLEVEL%
 
 :restore_base
 
-	setlocal
-	call :arg_parser ICBASE:BASEFILE %*
-	set CMDLINE=designer /s%ICSRV%\%ICBASE% /n%ICUSR% /p%ICPASS% /DisableStartupMessages /RestoreIB ""%BASEFILE%""
-	call :roll_base CMDLINE:"%CMDLINE%"
+	call :roll_base MODE:RestoreIB %*
 exit /b %ERRORLEVEL%
 
 :roll_base
 
 	setlocal
-	call :arg_parser CMDLINE %*
-	for /f "" %%i in ('call :start_proc exec:"%ICEXE%" cmdline:"%CMDLINE%"') do set PID=%%i
+	call :arg_parser ICBASE:BASEFILE:MODE %*
+	set BASEFILE=%BASEFILE:"=""%
+	set CMDLINE=designer /s%ICSERVER%\%ICBASE% /n%ICUSER% /p%ICPASS% /DisableStartupMessages /%MODE% %BASEFILE%
+	rem for /f "tokens=*" %%i in ('call %~nx0 start_proc exec:"%ICEXE%" cmdline:"%CMDLINE%" ^2^>nul ^|findstr /r .') do echo:%%i
+	for /f %%i in ('call %~nx0 start_proc exec:"%ICEXE%" cmdline:"%CMDLINE%" ^2^>nul ^|findstr /r ^^[0-9]^$') do set PID=%%i
 	if "%PID%" NEQ "" call :wait_for_pid %PID%
 exit /b %ERRORLEVEL%
 
 :wait_for_pid
 
 	ping -n 5 -w 1000 127.0.0.1 >nul
-	for /f "tokens=1 delims=. " %%i in ('tasklist /nh /fi "PID eq %1"') do (
-		if "%%i" NEQ "" call :wait_for_pid %1
+	for /f %%i in ('tasklist /nh /fi "PID eq %1" ^| find "%1" ^>nul ^&^& echo:one ^|^| echo:none') do (
+		if "%%i" NEQ "none" call :wait_for_pid %1
 	)
 exit /b
 
 :start_proc
 
 	setlocal
-	call :argParser exec:cmdline:workdir:host:user:pass:record %*
+	call :arg_parser exec:cmdline:workdir:host:user:pass:record %*
 
-	if "%exec:"=%" EQU "" (
+	if "%exec%" EQU "" (
 		call :err 1000
 		exit /b %ERRORLEVEL%
 	)
@@ -109,7 +102,7 @@ exit /b
 
 	set global_params=%record% %host% %user% %pass%
 
-	for /f "usebackq tokens=*" %%G IN (`wmic  %global_params%  process call create "%exec% %cmdline%"^,"%workdir%"`) do ( 
+	for /f "tokens=*" %%G IN ('wmic  %global_params%  process call create "%exec% %cmdline%"^,"%workdir%"') do ( 
 		rem echo %%G
 		set _tmp=%%G
 		set _tmp=!_tmp:^>=^^^>!
@@ -144,11 +137,11 @@ exit /b %ERRORLEVEL%
 	call :arg_parser ICBASE %*
 	call :gen_file_name VBSFILE
 	set VBSLOG=%VBSFILE:VBS=LOG%
-	call :gen_vbs001_file filemane:%VBSFILE% ICUSER:%ICUSER% ICPASS:%ICPASS% ICSERVER:%ICSERVER% ICBASE:%ICBASE%
+	call :gen_vbs001_file filename:%VBSFILE% ICUSER:%ICUSER% ICPASS:%ICPASS% ICSERVER:%ICSERVER% ICBASE:%ICBASE%
 	cscript %VBSFILE% //nologo 2>%VBSLOG%
-	for /f "tokens=4 delims=[] " %%i in ('dir intlname.ols ^| find /n /v "" ^| find "[7]"') do (
+	for /f "" %%i in (%VBSLOG%) do (
 		rem Вставить обработку ошибок
-		if "%%i" NEQ "0" ()
+		rem if "%%~zi" NEQ "0" ()
 	)
 	del /q /f %VBSLOG%
 	del /q /f %VBSFILE%
@@ -170,14 +163,16 @@ exit /b
 	set comstr=%~1
 	shift
 	:nextShift
-	echo:%~1 %~2
-	for /f "tokens=1,* delims=:" %%i in ("%~1") do (
+	rem echo:%~1 %~2
+	for /f "tokens=1,* delims=:" %%i in ('echo:%~1') do (
 		echo %comstr% | find "%%i" > nul && (
 			set %%i=%%~j
 		)
 	)
 	shift
-	if "%~1" NEQ "" goto :nextShift
+	for /f %%i in ('echo:%1^|findstr /r . ^>nul ^&^& echo:full^|^| echo:empty') do (
+		if "%%i" NEQ "empty" goto :nextShift
+	)
 exit /b
 
 :gen_file
@@ -191,14 +186,21 @@ exit /b
 	for /f "usebackq skip=%BBEG% tokens=*" %%i in ("%~dpnx0") do (
 		if !count! LEQ 0 goto :gen_file_end
 		set _tmp=%%i
-		set _tmp=!_tmp:^<=^^^<!
-		set _tmp=!_tmp:^>=^^^>!
-		set _tmp=!_tmp:^&=^^^&!
+		call :escapes _tmp
 		for /f "tokens=*" %%j in ('echo:!_tmp!') do echo:%%j>>%filename%
 		set /a count=count-1
 	)
 	:gen_file_end
 exit /b %ERORLEVEL%
+
+:escapes
+
+	set %1=!%1:^<=^^^<!
+	set %1=!%1:^>=^^^>!
+	set %1=!%1:^&=^^^&!
+	set %1=!%1:^(=^^^(!
+	set %1=!%1:^)=^^^)!
+exit /b
 
 :gen_vbs001_file
 
@@ -249,8 +251,10 @@ Next
 ;******************************************************************************************
 LDATE=!date:~-4!!date:~3,2!!date:~0,2!
 LTIME=!time: =0!
+BASEDATE=!date:~-4!.!date:~3,2!.!date:~0,2!
+BASEFILE=!PATH2ARC!!IBOUT!_!BASEDATE!.dt
 PRIORITY=NORMAL
 ICUSER=robot
 ICPASS=p@ssw0rd
 ICSERVER=server
-ICEXE=C:\Program Files\1cv82\common\1cestart.exe
+ICEXE=C:\Program Files (x86)\1cv82\8.2.15.289\bin\1cv8.exe
