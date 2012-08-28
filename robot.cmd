@@ -39,12 +39,19 @@ exit /b %ERRORLEVEL%
 :run_proc
 
 	setlocal
-	call :arg_parser IBOUT:IBIN:BASEFILE
+	call :arg_parser IBOUT:IBIN:BASEFILE %*
 	call :kick_users ICBASE:%IBOUT%
 	call :dump_base ICBASE:%IBOUT% BASEFILE:%BASEFILE%
 	call :kick_users ICBASE:%IBIN%
 	call :restore_base ICBASE:%IBIN% BASEFILE:%BASEFILE%
-	rem call :roll_files
+	call :roll_files BASEFILE:%BASEFILE% PATH2ARC:%PATH2ARC%
+exit /b %ERRORLEVEL%
+
+:roll_files
+
+	setlocal
+	call :arg_parser BASEFILE:PATH2ARC %*
+	xcopy /y "%BASEFILE%" "%PATH2ARC%" >nul && del /q /f "%BASEFILE%"
 exit /b %ERRORLEVEL%
 
 :dump_base
@@ -63,8 +70,11 @@ exit /b %ERRORLEVEL%
 	call :arg_parser ICBASE:BASEFILE:MODE %*
 	set BASEFILE=%BASEFILE:"=""%
 	set CMDLINE=designer /s%ICSERVER%\%ICBASE% /n%ICUSER% /p%ICPASS% /DisableStartupMessages /%MODE% %BASEFILE%
-	rem for /f "tokens=*" %%i in ('call %~nx0 start_proc exec:"%ICEXE%" cmdline:"%CMDLINE%" ^2^>nul ^|findstr /r .') do echo:%%i
-	for /f %%i in ('call %~nx0 start_proc exec:"%ICEXE%" cmdline:"%CMDLINE%" ^2^>nul ^|findstr /r ^^[0-9]^$') do set PID=%%i
+	REM for /f "tokens=*" %%i in ('call %~nx0 start_proc exec:"%ICEXE%" cmdline:"%CMDLINE%" ^|findstr /r .') do (
+	for /f %%i in ('call %~nx0 start_proc exec:"%ICEXE%" cmdline:"%CMDLINE%" ^|findstr /r ^^[0-9]^$') do (
+		REM echo:%%i
+		set PID=%%i
+	)
 	if "%PID%" NEQ "" call :wait_for_pid %PID%
 exit /b %ERRORLEVEL%
 
@@ -252,7 +262,7 @@ Next
 LDATE=!date:~-4!!date:~3,2!!date:~0,2!
 LTIME=!time: =0!
 BASEDATE=!date:~-4!.!date:~3,2!.!date:~0,2!
-BASEFILE=!PATH2ARC!!IBOUT!_!BASEDATE!.dt
+BASEFILE=%~dp0!IBOUT!_!BASEDATE!.dt
 PRIORITY=NORMAL
 ICUSER=robot
 ICPASS=p@ssw0rd
