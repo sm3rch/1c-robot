@@ -8,7 +8,7 @@ if exist "%~1" (
 		set %%i=%%~j
 	)
 )
-	rem Применяем глобальные параметры
+	REM rem Применяем глобальные параметры
 for /f "delims=<[]" %%i in ('find /n "<SettingsBlock>" "%~dpnx0" ^| find "<SettingsBlock>"') do set /a SKIP=%%i
 for /f "usebackq skip=%SKIP% eol=; delims== tokens=1,*" %%i in ("%~dpnx0") do (
 	if not defined %%i set %%i=%%~j
@@ -23,17 +23,15 @@ if not defined LOG (
 ) else (
 	call :gen_file_name LOGFILE
 )
-echo dump_base;restore_base;kick_users;start_proc | find "%~1" 1>nul 2>nul ^
-	&& (call :call_proc %*) ^
-	|| (call :run_proc)
+for /f "tokens=*" %%i in ('echo:dump_base;restore_base;kick_users;start_proc ^| find "%~1" 1^>nul 2^>nul ^&^& echo:call_proc %*^|^|echo:run_proc') do (call :%%i)
 exit /b %ERRORLEVEL%
 
 :call_proc
 
 	set proc=%1
-	set cmdline=%*
-	set cmdline=!cmdline:%proc%=!
-	call :%proc% %cmdline%
+	set cmds=%*
+	set cmds=!cmds:%proc%=!
+	call :%proc% %cmds%
 exit /b %ERRORLEVEL%
 
 :run_proc
@@ -72,7 +70,7 @@ exit /b %ERRORLEVEL%
 	set CMDLINE=designer /s%ICSERVER%\%ICBASE% /n%ICUSER% /p%ICPASS% /DisableStartupMessages /%MODE% %BASEFILE%
 	REM for /f "tokens=*" %%i in ('call %~nx0 start_proc exec:"%ICEXE%" cmdline:"%CMDLINE%" ^|findstr /r .') do (
 	for /f %%i in ('call %~nx0 start_proc exec:"%ICEXE%" cmdline:"%CMDLINE%" ^|findstr /r ^^[0-9]^$') do (
-		REM echo:%%i
+		rem echo:%%i
 		set PID=%%i
 	)
 	if "%PID%" NEQ "" call :wait_for_pid %PID%
@@ -112,24 +110,16 @@ exit /b
 
 	set global_params=%record% %host% %user% %pass%
 
-	for /f "tokens=*" %%G IN ('wmic  %global_params%  process call create "%exec% %cmdline%"^,"%workdir%"') do ( 
-		rem echo %%G
-		set _tmp=%%G
-		set _tmp=!_tmp:^>=^^^>!
-		echo !_tmp! | find "ProcessId" > nul && (
-			for /f  "tokens=2 delims=;= " %%H in ('echo !_tmp!') do (
-				call set /A PID=%%H
-			)
-		)
-		echo !_tmp! | find "ReturnValue" > nul && (
-			for /f  "tokens=2 delims=;= " %%I in ('echo !_tmp!') do (
-				call set /A RETCOD=%%I
-			)
+	REM for /f "tokens=*" %%G IN ('wmic %global_params%  process call create "%exec% %cmdline%"^,"%workdir%"^|findstr "="') do ( 
+	for /f "tokens=*" %%G IN ('wmic %global_params% process call create "%exec% %cmdline%"^,"%workdir%"^|findstr "="') do ( 
+		rem %%G
+		for /f  "tokens=2 delims=;= " %%H in ('echo:%%G') do (
+			echo %%G | find "ProcessId" > nul && (call set /A PID=%%H)
+			echo %%G | find "ReturnValue" > nul && (call set /A RETCOD=%%H)
 		)
 		rem call :concat
 	)
-	set _tmp=
-	
+
 	rem successful execution
 	if "%PID%" NEQ "" (
 		echo %PID%
@@ -138,7 +128,6 @@ exit /b
 	) else (
 		call :err %RETCOD%
 	)
-
 exit /b %ERRORLEVEL%
 
 :kick_users
@@ -173,11 +162,8 @@ exit /b
 	set comstr=%~1
 	shift
 	:nextShift
-	rem echo:%~1 %~2
-	for /f "tokens=1,* delims=:" %%i in ('echo:%~1') do (
-		echo %comstr% | find "%%i" > nul && (
-			set %%i=%%~j
-		)
+	for /f "tokens=1,* delims=:" %%i in ('echo:%1') do (
+		echo %comstr% | find "%%i" > nul && (set %%i=%%~j)
 	)
 	shift
 	for /f %%i in ('echo:%1^|findstr /r . ^>nul ^&^& echo:full^|^| echo:empty') do (
@@ -220,7 +206,6 @@ exit /b
 exit /b %ERORLEVEL%
 
 :err
-
 exit /b %ERORLEVEL%
 
 <vbs001>
