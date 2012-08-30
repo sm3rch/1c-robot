@@ -67,6 +67,7 @@ exit /b %ERRORLEVEL%
 	setlocal
 	call :arg_parser ICBASE:BASEFILE:MODE %*
 	set BASEFILE=%BASEFILE:"=""%
+	for /f %%i in ('echo:%ICBASE%*%BASEFILE%^|findstr /r .\*. ^>nul ^|^|echo:error') do exit /b 
 	set CMDLINE=designer /s%ICSERVER%\%ICBASE% /n%ICUSER% /p%ICPASS% /DisableStartupMessages /%MODE% %BASEFILE%
 	REM for /f "tokens=*" %%i in ('call %~nx0 start_proc exec:"%ICEXE%" cmdline:"%CMDLINE%" ^|findstr /r .') do (
 	for /f %%i in ('call %~nx0 start_proc exec:"%ICEXE%" cmdline:"%CMDLINE%" ^|findstr /r ^^[0-9]^$') do (
@@ -134,6 +135,7 @@ exit /b %ERRORLEVEL%
 
 	setlocal
 	call :arg_parser ICBASE %*
+	for /f %%i in ('echo:%ICBASE%^|findstr /r . ^>nul ^|^|echo:error') do exit /b 
 	call :gen_file_name VBSFILE
 	set VBSLOG=%VBSFILE:VBS=LOG%
 	call :gen_vbs001_file filename:%VBSFILE% ICUSER:%ICUSER% ICPASS:%ICPASS% ICSERVER:%ICSERVER% ICBASE:%ICBASE%
