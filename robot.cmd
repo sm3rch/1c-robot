@@ -151,7 +151,9 @@ exit /b %ERRORLEVEL%
 :gen_file_name
 
 	set _tmp=%1
-	set %1=%LDATE%%LTIME%
+	for /l %%j in (1,1,10) do (set /? | find "." > nul)
+	set /a rnd=!time:~-2!*!random! 2>nul
+	set %1=%LDATE%%LTIME%!rnd:~0,3!
 	set %1=!%1::=!
 	set %1=!%1:.=!
 	set %1=!%1: =!
