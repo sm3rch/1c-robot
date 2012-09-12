@@ -67,14 +67,15 @@ exit /b %ERRORLEVEL%
 
 	setlocal
 	call :arg_parser ICBASE:BASEFILE:EPFFILE:MODE %*
-	if defined BASEFILE (
-		set BASEFILE=%BASEFILE:"=""%
+	if defined MODE (
+		if defined BASEFILE (set BASEFILE=%BASEFILE:"=""%)
 		for /f %%i in ('echo:%ICBASE%*%BASEFILE%^|findstr /r .\*. ^>nul ^|^|echo:error') do exit /b
 		set CMDLINE=designer /s%ICSERVER%\%ICBASE% /n%ICUSER% /p%ICPASS% /DisableStartupMessages /%MODE% %BASEFILE%
-	)
-	if defined EPFFILE  (
-		call :get_full_path EPFFILE %EPFFILE%
-		set EPFFILE=!EPFFILE:"=""!
+	) else (
+		if defined EPFFILE  (
+			call :get_full_path EPFFILE %EPFFILE%
+			set EPFFILE=!EPFFILE:"=""!
+		)
 		set CMDLINE=enterprise /s%ICSERVER%\%ICBASE% /n%ICUSER% /p%ICPASS% /DisableStartupMessages /Execute !EPFFILE!
 	)
 	REM for /f "tokens=*" %%i in ('call %~nx0 start_proc exec:"%ICEXE%" cmdline:"%CMDLINE%" ^|findstr /r .') do (
