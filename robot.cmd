@@ -42,6 +42,7 @@ exit /b %ERRORLEVEL%
 	call :dump_base ICBASE:%IBOUT% BASEFILE:%BASEFILE%
 	call :kick_users ICBASE:%IBIN%
 	call :restore_base ICBASE:%IBIN% BASEFILE:%BASEFILE%
+	rem call :roll_base ICBASE:%IBOUT% EPFFILE:%EPFFILE%
 	call :roll_files BASEFILE:%BASEFILE% PATH2ARC:%PATH2ARC%
 exit /b %ERRORLEVEL%
 
@@ -65,10 +66,15 @@ exit /b %ERRORLEVEL%
 :roll_base
 
 	setlocal
-	call :arg_parser ICBASE:BASEFILE:MODE %*
-	set BASEFILE=%BASEFILE:"=""%
-	for /f %%i in ('echo:%ICBASE%*%BASEFILE%^|findstr /r .\*. ^>nul ^|^|echo:error') do exit /b 
-	set CMDLINE=designer /s%ICSERVER%\%ICBASE% /n%ICUSER% /p%ICPASS% /DisableStartupMessages /%MODE% %BASEFILE%
+	call :arg_parser ICBASE:BASEFILE:EPFFILE:MODE %*
+	if defined BASEFILE (set BASEFILE=%BASEFILE:"=""%)
+	if defined EPFFILE  (set EPFFILE=%EPFFILE:"=""%)
+	for /f %%i in ('echo:%ICBASE%*%BASEFILE%^|findstr /r .\*. ^>nul ^|^|echo:error') do exit /b
+	if defined EPFFILE (
+		set CMDLINE=enterprise /s%ICSERVER%\%ICBASE% /n%ICUSER% /p%ICPASS% /DisableStartupMessages /Execute %EPFFILE%
+	) else (
+		set CMDLINE=designer /s%ICSERVER%\%ICBASE% /n%ICUSER% /p%ICPASS% /DisableStartupMessages /%MODE% %BASEFILE%
+	)
 	REM for /f "tokens=*" %%i in ('call %~nx0 start_proc exec:"%ICEXE%" cmdline:"%CMDLINE%" ^|findstr /r .') do (
 	for /f %%i in ('call %~nx0 start_proc exec:"%ICEXE%" cmdline:"%CMDLINE%" ^|findstr /r ^^[0-9]^$') do (
 		rem echo:%%i
