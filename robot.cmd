@@ -1,5 +1,8 @@
 @echo off
 
+for /f "tokens=4" %%i in ('chcp') do set CODEPAGE=%%i
+chcp 1251>nul
+
 if "%init%" EQU "done" goto :init_done
 setlocal disabledelayedexpansion
 if exist "%~1" (
@@ -23,7 +26,9 @@ if not defined LOG (
 ) else (
 	call :gen_file_name LOGFILE
 )
-for /f "tokens=*" %%i in ('echo:dump_base;restore_base;kick_users;start_proc ^| find "%~1" 1^>nul 2^>nul ^&^& echo:call_proc %*^|^|echo:run_proc') do (call :%%i)
+for /f "tokens=*" %%i in ('echo:change_system_header:dump_base;restore_base;kick_users;start_proc ^| find "%~1" 1^>nul 2^>nul ^&^& echo:call_proc %*^|^|echo:run_proc') do (call :%%i)
+
+chcp %CODEPAGE%>nul
 exit /b %ERRORLEVEL%
 
 :call_proc
@@ -42,7 +47,7 @@ exit /b %ERRORLEVEL%
 	call :dump_base ICBASE:%IBOUT% BASEFILE:%BASEFILE%
 	call :kick_users ICBASE:%IBIN%
 	call :restore_base ICBASE:%IBIN% BASEFILE:%BASEFILE%
-	call :roll_base ICBASE:%IBOUT% EPFFILE:%EPFFILE%
+	call :change_system_header ICBASE:%IBIN%
 	call :roll_files BASEFILE:%BASEFILE% PATH2ARC:%PATH2ARC%
 exit /b %ERRORLEVEL%
 
@@ -142,12 +147,23 @@ exit /b %ERRORLEVEL%
 
 :kick_users
 
+	call :run_vbs number:001 %*
+exit /b %ERRORLEVEL%
+
+:change_system_header
+
+	call :run_vbs number:002 %*
+exit /b %ERRORLEVEL%
+
+:run_vbs
+
 	setlocal
-	call :arg_parser ICBASE %*
+	call :arg_parser number:ICBASE %*
+	if not defined number exit /b 
 	for /f %%i in ('echo:%ICBASE%^|findstr /r . ^>nul ^|^|echo:error') do exit /b 
 	call :gen_file_name VBSFILE
 	set VBSLOG=%VBSFILE:VBS=LOG%
-	call :gen_vbs001_file filename:%VBSFILE% ICUSER:%ICUSER% ICPASS:%ICPASS% ICSERVER:%ICSERVER% ICBASE:%ICBASE%
+	call :gen_vbs%number%_file filename:%VBSFILE% ICUSER:%ICUSER% ICPASS:%ICPASS% ICSERVER:%ICSERVER% ICBASE:%ICBASE%
 	cscript %VBSFILE% //nologo 2>%VBSLOG%
 	for /f "" %%i in (%VBSLOG%) do (
 		rem Вставить обработку ошибок
@@ -223,6 +239,13 @@ exit /b
 	call :gen_file find:vbs001 
 exit /b %ERORLEVEL%
 
+:gen_vbs002_file
+
+	setlocal
+	call :arg_parser filename:ICUSER:ICPASS:ICSERVER:ICBASE %*
+	call :gen_file find:vbs002 
+exit /b %ERORLEVEL%
+
 :err
 exit /b %ERORLEVEL%
 
@@ -258,9 +281,26 @@ For i = LBound(connections) To UBound(connections)
 Next
 </vbs001>
 
+<vbs002>
+Dim IC
+Dim SystemHeader
+Dim VersionNumber
+Dim pos
+
+Set IC = CreateObject("V82.Application")
+
+IC.Connect ("Srvr=""%ICSERVER%"";Ref=""%ICBASE%"";Usr=""%ICUSER%"";Pwd=""%ICPASS%""")
+    
+SystemHeader = Replace(IC.Constants.[ЗаголовокСистемы].Get(), "TEST_", "")
+VersionNumber = IC.Constants.[НомерВерсииКонфигурации].Get()
+pos = InStr(SystemHeader, "_")
+IC.Constants.[ЗаголовокСистемы].Set ("TEST_" & Left(SystemHeader, pos - 1) & "_" & VersionNumber)
+IC.Exit (False)
+</vbs002>
+
 <SettingsBlock>
 ;******************************************************************************************
-; Глобальные настройки робота. !Внимание! кодировка должна быть 866
+; Глобальные настройки робота. !Внимание! кодировка должна быть 1251
 ;******************************************************************************************
 LDATE=!date:~-4!!date:~3,2!!date:~0,2!
 LTIME=!time: =0!
