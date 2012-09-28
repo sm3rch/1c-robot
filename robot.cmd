@@ -43,12 +43,13 @@ exit /b %ERRORLEVEL%
 
 	setlocal
 	call :arg_parser IBOUT:IBIN:BASEFILE %*
-	call :kick_users ICBASE:%IBOUT%
-	call :dump_base ICBASE:%IBOUT% BASEFILE:%BASEFILE%
-	call :kick_users ICBASE:%IBIN%
-	call :restore_base ICBASE:%IBIN% BASEFILE:%BASEFILE%
-	call :change_system_header ICBASE:%IBIN%
-	call :roll_files BASEFILE:%BASEFILE% PATH2ARC:%PATH2ARC%
+	call :kick_users ICBASE:%IBOUT% || goto :run_proc_end
+	call :dump_base ICBASE:%IBOUT% BASEFILE:%BASEFILE% || goto :run_proc_end
+	call :kick_users ICBASE:%IBIN% || goto :run_proc_end
+	call :restore_base ICBASE:%IBIN% BASEFILE:%BASEFILE% || goto :run_proc_end
+	call :change_system_header ICBASE:%IBIN% || goto :run_proc_end
+	call :roll_files BASEFILE:%BASEFILE% PATH2ARC:%PATH2ARC% || goto :run_proc_end
+	:run_proc_end
 exit /b %ERRORLEVEL%
 
 :roll_files
@@ -93,11 +94,20 @@ exit /b %ERRORLEVEL%
 
 :wait_for_pid
 
+	setlocal
+	:wait_for_pid_start
+	set /a num=1+num
 	ping -n 5 -w 1000 127.0.0.1 >nul
 	for /f %%i in ('tasklist /nh /fi "PID eq %1" ^| find "%1" ^>nul ^&^& echo:one ^|^| echo:none') do (
-		if "%%i" NEQ "none" call :wait_for_pid %1
+		if "%%i" NEQ "none" (
+			if %num% GEQ %PROCTIMEOUT% (
+				set ERRORLEVEL=10001
+			) else (
+				goto :wait_for_pid_start
+			)
+		)
 	)
-exit /b
+exit /b %ERRORLEVEL%
 
 :start_proc
 
@@ -302,6 +312,7 @@ IC.Exit (False)
 ;******************************************************************************************
 ; Глобальные настройки робота. !Внимание! кодировка должна быть 1251
 ;******************************************************************************************
+PROCTIMEOUT=2160
 LDATE=!date:~-4!!date:~3,2!!date:~0,2!
 LTIME=!time: =0!
 BASEDATE=!date:~-4!.!date:~3,2!.!date:~0,2!
