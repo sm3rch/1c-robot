@@ -293,18 +293,11 @@ Next
 
 <vbs002>
 Dim IC
-Dim SystemHeader
 Dim VersionNumber
-Dim pos
 
 Set IC = CreateObject("V82.Application")
-
 IC.Connect ("Srvr=""%ICSERVER%"";Ref=""%ICBASE%"";Usr=""%ICUSER%"";Pwd=""%ICPASS%""")
-    
-SystemHeader = Replace(IC.Constants.[ЗаголовокСистемы].Get(), "TEST_", "")
-VersionNumber = IC.Constants.[НомерВерсииКонфигурации].Get()
-pos = InStr(SystemHeader, "_")
-IC.Constants.[ЗаголовокСистемы].Set ("TEST_" & Left(SystemHeader, pos - 1) & "_" & VersionNumber)
+IC.Constants.[ЗаголовокСистемы].Set ("%ICBASE%" & "_" & IC.Constants.[НомерВерсииКонфигурации].Get())
 IC.Exit (False)
 </vbs002>
 
