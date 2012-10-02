@@ -43,11 +43,8 @@ exit /b %ERRORLEVEL%
 
 	setlocal
 	call :arg_parser IBOUT:IBIN:BASEFILE %*
-	call :kick_users ICBASE:%IBOUT% || goto :run_proc_end
 	call :dump_base ICBASE:%IBOUT% BASEFILE:%BASEFILE% || goto :run_proc_end
-	call :kick_users ICBASE:%IBIN% || goto :run_proc_end
 	call :restore_base ICBASE:%IBIN% BASEFILE:%BASEFILE% || goto :run_proc_end
-	call :change_system_header ICBASE:%IBIN% || goto :run_proc_end
 	call :roll_files BASEFILE:%BASEFILE% PATH2ARC:%PATH2ARC% || goto :run_proc_end
 	:run_proc_end
 exit /b %ERRORLEVEL%
@@ -61,12 +58,15 @@ exit /b %ERRORLEVEL%
 
 :dump_base
 
+	call :kick_users %*
 	call :roll_base MODE:DumpIB %*
 exit /b %ERRORLEVEL%
 
 :restore_base
 
+	call :kick_users %*
 	call :roll_base MODE:RestoreIB %*
+	call :cange_system_header %*
 exit /b %ERRORLEVEL%
 
 :roll_base
