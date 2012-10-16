@@ -44,8 +44,8 @@ exit /b %ERRORLEVEL%
 	setlocal
 	call :arg_parser IBOUT:IBIN:BASEFILE %*
 	call :dump_base ICBASE:%IBOUT% BASEFILE:%BASEFILE% || goto :run_proc_end
-	call :restore_base ICBASE:%IBIN% BASEFILE:%BASEFILE% || goto :run_proc_end
-	call :roll_files BASEFILE:%BASEFILE% PATH2ARC:%PATH2ARC% || goto :run_proc_end
+	call :restore_base ICBASE:%IBIN% BASEFILE:%BASEFILE%
+	call :roll_files BASEFILE:%BASEFILE% PATH2ARC:%PATH2ARC%
 	:run_proc_end
 exit /b %ERRORLEVEL%
 
@@ -53,7 +53,9 @@ exit /b %ERRORLEVEL%
 
 	setlocal
 	call :arg_parser BASEFILE:PATH2ARC %*
-	xcopy /y "%BASEFILE%" "%PATH2ARC%" >nul && del /q /f "%BASEFILE%"
+	if exist "%BASEFILE%" ( 
+		xcopy /y "%BASEFILE%" "%PATH2ARC%" >nul && del /q /f "%BASEFILE%"
+	)
 exit /b %ERRORLEVEL%
 
 :dump_base
@@ -73,15 +75,16 @@ exit /b %ERRORLEVEL%
 
 	setlocal
 	call :arg_parser ICBASE:BASEFILE:EPFFILE:MODE %*
+	if not defined ICBASE (exit /b 10002)
 	if defined MODE (
-		if defined BASEFILE (set BASEFILE=%BASEFILE:"=""%)
+		if defined BASEFILE (set BASEFILE=%BASEFILE:"=""%) else (exit /b 10003)
 		for /f %%i in ('echo:%ICBASE%*%BASEFILE%^|findstr /r .\*. ^>nul ^|^|echo:error') do exit /b
 		set CMDLINE=designer /s%ICSERVER%\%ICBASE% /n%ICUSER% /p%ICPASS% /DisableStartupMessages /%MODE% %BASEFILE%
 	) else (
 		if defined EPFFILE  (
 			call :get_full_path EPFFILE %EPFFILE%
 			set EPFFILE=!EPFFILE:"=""!
-		)
+		) else (exit /b 10004)
 		set CMDLINE=enterprise /s%ICSERVER%\%ICBASE% /n%ICUSER% /p%ICPASS% /DisableStartupMessages /Execute !EPFFILE!
 	)
 	REM for /f "tokens=*" %%i in ('call %~nx0 start_proc exec:"%ICEXE%" cmdline:"%CMDLINE%" ^|findstr /r .') do (
@@ -170,7 +173,7 @@ exit /b %ERRORLEVEL%
 	setlocal
 	call :arg_parser number:ICBASE %*
 	if not defined number exit /b 
-	for /f %%i in ('echo:%ICBASE%^|findstr /r . ^>nul ^|^|echo:error') do exit /b 
+	for /f %%i in ('echo:%ICBASE%^|findstr /r . ^>nul ^|^|echo:error') do (exit /b 20000)
 	call :gen_file_name VBSFILE
 	set VBSLOG=%VBSFILE:VBS=LOG%
 	call :gen_vbs%number%_file filename:%VBSFILE% ICUSER:%ICUSER% ICPASS:%ICPASS% ICSERVER:%ICSERVER% ICBASE:%ICBASE%
