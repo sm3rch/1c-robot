@@ -68,7 +68,7 @@ exit /b %ERRORLEVEL%
 
 	call :kick_users %*
 	call :roll_base MODE:RestoreIB %*
-	call :cange_system_header %*
+	call :change_system_header %*
 exit /b %ERRORLEVEL%
 
 :roll_base
