@@ -74,18 +74,23 @@ exit /b %ERRORLEVEL%
 :roll_base
 
 	setlocal
-	call :arg_parser ICBASE:BASEFILE:EPFFILE:MODE %*
+	set ARGS=ICBASE:BASEFILE:EPFFILE:MODE
+	echo %* | find "ICUSER" > nul && (set ARGS=!ARGS!:ICUSER)
+	echo %* | find "ICPASS" > nul && (set ARGS=!ARGS!:ICPASS)
+	call :arg_parser !ARGS! %*
 	if not defined ICBASE (exit /b 10002)
+	if defined ICUSER (set ICUSER=/n%ICUSER%)
+	if defined ICPASS (set ICPASS=/p%ICPASS%)
 	if defined MODE (
 		if defined BASEFILE (set BASEFILE=%BASEFILE:"=""%) else (exit /b 10003)
 		for /f %%i in ('echo:%ICBASE%*%BASEFILE%^|findstr /r .\*. ^>nul ^|^|echo:error') do exit /b
-		set CMDLINE=designer /s%ICSERVER%\%ICBASE% /n%ICUSER% /p%ICPASS% /DisableStartupMessages /%MODE% %BASEFILE%
+		set CMDLINE=designer /s%ICSERVER%\%ICBASE% %ICUSER% %ICPASS% /DisableStartupMessages /%MODE% %BASEFILE%
 	) else (
 		if defined EPFFILE  (
 			call :get_full_path EPFFILE %EPFFILE%
 			set EPFFILE=!EPFFILE:"=""!
 		) else (exit /b 10004)
-		set CMDLINE=enterprise /s%ICSERVER%\%ICBASE% /n%ICUSER% /p%ICPASS% /DisableStartupMessages /Execute !EPFFILE!
+		set CMDLINE=enterprise /s%ICSERVER%\%ICBASE% %ICUSER% %ICPASS% /DisableStartupMessages /Execute !EPFFILE!
 	)
 	REM for /f "tokens=*" %%i in ('call %~nx0 start_proc exec:"%ICEXE%" cmdline:"%CMDLINE%" ^|findstr /r .') do (
 	for /f %%i in ('call %~nx0 start_proc exec:"%ICEXE%" cmdline:"%CMDLINE%" ^|findstr /r ^^[0-9]^$') do (
