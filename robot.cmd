@@ -26,7 +26,7 @@ if not defined LOG (
 ) else (
 	call :gen_file_name LOGFILE
 )
-for /f "tokens=*" %%i in ('echo:change_system_header:dump_base;restore_base;kick_users;start_proc ^| find "%~1" 1^>nul 2^>nul ^&^& echo:call_proc %*^|^|echo:run_proc') do (call :%%i)
+for /f "tokens=*" %%i in ('echo:change_system_header:dump_base;restore_base;kick_users;restore_normal_mode;start_proc ^| find "%~1" 1^>nul 2^>nul ^&^& echo:call_proc %*^|^|echo:run_proc') do (call :%%i)
 
 chcp %CODEPAGE%>nul
 exit /b %ERRORLEVEL%
@@ -61,13 +61,18 @@ exit /b %ERRORLEVEL%
 :dump_base
 
 	call :kick_users %*
+	REM :dump_base_again
+	REM set /a cnt=1+cnt
+	REM call :roll_base MODE:DumpIB %* || if %cnt% LEQ 3 goto :dump_base_again
 	call :roll_base MODE:DumpIB %*
+	call :restore_normal_mode %*
 exit /b %ERRORLEVEL%
 
 :restore_base
 
 	call :kick_users %*
 	call :roll_base MODE:RestoreIB %*
+	call :restore_normal_mode %*
 	call :change_system_header %*
 exit /b %ERRORLEVEL%
 
@@ -83,7 +88,10 @@ exit /b %ERRORLEVEL%
 	if defined ICPASS (set ICPASS=/p%ICPASS%)
 	if defined MODE (
 		if defined BASEFILE (set BASEFILE=%BASEFILE:"=""%) else (exit /b 10003)
-		for /f %%i in ('echo:%ICBASE%*%BASEFILE%^|findstr /r .\*. ^>nul ^|^|echo:error') do exit /b
+		for /f %%i in ('echo:%ICBASE%*%BASEFILE%^|findstr /r .\*. ^>nul ^|^|echo:error') do exit /b 10006
+		if "%MODE%" EQU "RestoreIB" (
+			if not exist "%BASEFILE%" exit /b 10007
+		)
 		set CMDLINE=designer /s%ICSERVER%\%ICBASE% %ICUSER% %ICPASS% /DisableStartupMessages /%MODE% %BASEFILE%
 	) else (
 		if defined EPFFILE  (
@@ -98,6 +106,11 @@ exit /b %ERRORLEVEL%
 		set PID=%%i
 	)
 	if "%PID%" NEQ "" call :wait_for_pid %PID%
+	if defined MODE (
+		if "%MODE%" EQU "DumpIB" (
+			if not exist "%BASEFILE%" (set ERRORLEVEL=10005)
+		)
+	)
 exit /b %ERRORLEVEL%
 
 :wait_for_pid
@@ -173,6 +186,11 @@ exit /b %ERRORLEVEL%
 	call :run_vbs number:002 %*
 exit /b %ERRORLEVEL%
 
+:restore_normal_mode
+
+	call :run_vbs number:003 %*
+exit /b %ERRORLEVEL%
+
 :run_vbs
 
 	setlocal
@@ -185,10 +203,12 @@ exit /b %ERRORLEVEL%
 	cscript %VBSFILE% //nologo 2>%VBSLOG%
 	for /f "" %%i in (%VBSLOG%) do (
 		rem Вставить обработку ошибок
-		rem if "%%~zi" NEQ "0" ()
+		if "%%~zi" NEQ "0" (set ERRORLEVEL=20001)
 	)
-	del /q /f %VBSLOG%
-	del /q /f %VBSFILE%
+	if not defined ERRORLEVEL (
+		del /q /f %VBSLOG%
+		del /q /f %VBSFILE%
+	)
 exit /b %ERRORLEVEL%
 
 :gen_file_name
@@ -224,14 +244,11 @@ exit /b
 	call :arg_parser find:filename %*
 	rem:>%filename%
 	for /f "delims=<[]" %%i in ('find /n "<%find%>" "%~dpnx0" ^| find "<%find%>"') do set /a BBEG=%%i
-	for /f "delims=<[]" %%i in ('find /n "</%find%>" "%~dpnx0" ^| find "</%find%>"') do set /a BEND=%%i
-	set /a count=BEND-BBEG-3
 	for /f "usebackq skip=%BBEG% tokens=*" %%i in ("%~dpnx0") do (
-		if !count! LEQ 0 goto :gen_file_end
 		set _tmp=%%i
 		call :escapes _tmp
+		echo:!_tmp! | find "</%find%>" > nul && goto :gen_file_end
 		for /f "tokens=*" %%j in ('echo:!_tmp!') do echo:%%j>>%filename%
-		set /a count=count-1
 	)
 	:gen_file_end
 exit /b %ERORLEVEL%
@@ -264,6 +281,13 @@ exit /b %ERORLEVEL%
 	call :gen_file find:vbs002 
 exit /b %ERORLEVEL%
 
+:gen_vbs003_file
+
+	setlocal
+	call :arg_parser filename:ICUSER:ICPASS:ICSERVER:ICBASE %*
+	call :gen_file find:vbs003 
+exit /b %ERORLEVEL%
+
 :err
 exit /b %ERORLEVEL%
 
@@ -273,8 +297,6 @@ Dim AgentConnection
 Dim Cluster
 Dim WorkingProcess
 Dim WorkingProcessConnection
-Dim ibDesc
-Dim connections
 Dim ConnectString
 
 Set Connector = CreateObject("V82.COMConnector")
@@ -285,15 +307,17 @@ Set WorkingProcess = AgentConnection.GetWorkingProcesses(Cluster)(0)
 ConnectString = WorkingProcess.HostName & ":" & WorkingProcess.MainPort
 Set WorkingProcessConnection = Connector.ConnectWorkingProcess(ConnectString)
 WorkingProcessConnection.AddAuthentication "%ICUSER%", "%ICPASS%"
-Set ibDesc = WorkingProcessConnection.CreateInfoBaseInfo()
-ibDesc.Name = "%ICBASE%"
-connections = WorkingProcessConnection.GetInfoBaseConnections(ibDesc)
 
-Dim i
-Dim Connection
-For i = LBound(connections) To UBound(connections)
-	Set Connection = connections(i)
-	If (Connection.AppID <> "COMConsole") Then
+For Each ibDesc In WorkingProcessConnection.GetInfoBases()
+	If ibDesc.Name = "%ICBASE%" Then
+		Exit For
+	End If
+Next
+ibDesc.ScheduledJobsDenied = True
+WorkingProcessConnection.UpdateInfobase (ibDesc)
+
+For Each Connection In WorkingProcessConnection.GetInfoBaseConnections(ibDesc)
+	If (InStr("COMConsole|SrvrConsole", Connection.AppID) = 0) Then
 		WorkingProcessConnection.Disconnect Connection
 	End If
 Next
@@ -308,6 +332,32 @@ IC.Connect ("Srvr=""%ICSERVER%"";Ref=""%ICBASE%"";Usr=""%ICUSER%"";Pwd=""%ICPASS
 IC.Constants.[ЗаголовокСистемы].Set ("%ICBASE%" & "_" & IC.Constants.[НомерВерсииКонфигурации].Get())
 IC.Exit (False)
 </vbs002>
+
+<vbs003>
+Dim Connector
+Dim AgentConnection
+Dim Cluster
+Dim WorkingProcess
+Dim WorkingProcessConnection
+Dim ConnectString
+
+Set Connector = CreateObject("V82.COMConnector")
+Set AgentConnection = Connector.ConnectAgent("%ICSERVER%")
+Set Cluster = AgentConnection.GetClusters()(0)
+AgentConnection.Authenticate Cluster, "", ""
+Set WorkingProcess = AgentConnection.GetWorkingProcesses(Cluster)(0)
+ConnectString = WorkingProcess.HostName & ":" & WorkingProcess.MainPort
+Set WorkingProcessConnection = Connector.ConnectWorkingProcess(ConnectString)
+WorkingProcessConnection.AddAuthentication "%ICUSER%", "%ICPASS%"
+
+For Each ibDesc In WorkingProcessConnection.GetInfoBases()
+	If ibDesc.Name = "%ICBASE%" Then
+		Exit For
+	End If
+Next
+ibDesc.ScheduledJobsDenied = False
+WorkingProcessConnection.UpdateInfobase (ibDesc)
+</vbs003>
 
 <SettingsBlock>
 ;******************************************************************************************
