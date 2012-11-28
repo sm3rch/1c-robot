@@ -205,7 +205,7 @@ exit /b %ERRORLEVEL%
 		rem Вставить обработку ошибок
 		if "%%~zi" NEQ "0" (set ERRORLEVEL=20001)
 	)
-	if not defined ERRORLEVEL (
+	if %ERRORLEVEL% EQU 0 (
 		del /q /f %VBSLOG%
 		del /q /f %VBSFILE%
 	)
