@@ -27,9 +27,9 @@ if not defined LOG (
 	call :gen_file_name LOGFILE
 )
 for /f "tokens=*" %%i in ('echo:change_system_header:dump_base;restore_base;kick_users;restore_normal_mode;start_proc ^| find "%~1" 1^>nul 2^>nul ^&^& echo:call_proc %*^|^|echo:run_proc') do (call :%%i)
-
+set ERRORNUMBER=%ERRORLEVEL%
 chcp %CODEPAGE%>nul
-exit /b %ERRORLEVEL%
+exit /b %ERRORNUMBER%
 
 :call_proc
 
